@@ -1,8 +1,9 @@
-﻿using OfficeOpenXml;
+﻿using System.Data;
+using OfficeOpenXml;
 
 namespace TableHelper;
 
-public static partial class ConfigParser
+public static class ConfigParser
 {
     public static Config ParseConfig(string inputStr)
     {
@@ -28,7 +29,7 @@ public static partial class ConfigParser
                     var value = strings[1];
 
                     if (!result.FileNameRules.TryAdd(key, value))
-                        throw new InvalidDataException("FileNameRules duplicated");
+                        throw new DuplicateNameException("FileNameRules duplicated");
 
                     continue;
                 }
@@ -44,7 +45,7 @@ public static partial class ConfigParser
                     var value = strings[1];
 
                     if (!result.FieldRules.TryAdd(key, value))
-                        throw new InvalidDataException("FieldRule duplicated");
+                        throw new DuplicateNameException("FieldRule duplicated");
 
                     continue;
                 }
@@ -53,13 +54,41 @@ public static partial class ConfigParser
                 {
                     result.FilePaths ??= [];
 
-                    if (entry.EndsWith(".xls"))
-                        throw new FormatException(".xls file format is not supported. Use .xlsx instead.");
-                    if (!entry.EndsWith(".xlsx"))
-                        throw new FormatException($"{entry} file format is not supported. Use .xlsx");
+                    if (entry.Contains("AUTO_SEARCH dir"))
+                    {
+                        var strings = entry.Split(" = ");
+                        if (strings.Length is < 2 or > 2)
+                            throw new FormatException("Invalid AUTO_SEARCH format");
 
-                    if (!result.FilePaths.Add(entry))
-                        throw new InvalidDataException("FilePath duplicated");
+                        var dirPath = strings[1];
+                        result.AutoFileSearchDirectories ??= [];
+
+                        var dir = new DirectoryInfo(dirPath);
+                        if (!dir.Exists) throw new DirectoryNotFoundException($"Directory not found: {dirPath}");
+
+                        if (!result.AutoFileSearchDirectories.Add(dirPath))
+                            throw new DuplicateNameException($"AutoFileSearchDirectories duplicated: {dirPath}");
+
+                        continue;
+                    }
+
+                    if (entry.Contains("AUTO_SEARCH contains"))
+                    {
+                        var strings = entry.Split(" = ");
+                        if (strings.Length is < 2 or > 2)
+                            throw new FormatException("Invalid AUTO_SEARCH format");
+
+                        var key = strings[1];
+                        if (!result.AutoFileSearchRules.Add(key))
+                            throw new DuplicateNameException($"AutoFileSearchRule duplicated: {key}");
+
+                        continue;
+                    }
+
+                    if (entry.Contains("AUTO_SEARCH"))
+                        throw new FormatException($"Invalid AUTO_SEARCH format: {entry}");
+
+                    AddFile(entry);
 
                     continue;
                 }
@@ -68,9 +97,36 @@ public static partial class ConfigParser
             }
         }
 
-        result.CheckValid();
+        if (result.FileNameRules is null) throw new FormatException($"Invalid file name replacement expression");
+        if (result.FieldRules is null) throw new FormatException($"Invalid field rules expression");
+
+        if (result.AutoFileSearchDirectories is not null)
+            foreach (var dir in result.AutoFileSearchDirectories)
+            {
+                var allFiles = new DirectoryInfo(dir)
+                    .GetFiles("*.xls*", SearchOption.AllDirectories);
+                var files = allFiles
+                    .Where(x => result.AutoFileSearchRules.All(rule => x.Name.Contains(rule)))
+                    .ToList();
+                foreach (var file in files) AddFile(file.FullName);
+            }
+
+        if (result.FilePaths is null) throw new FormatException($"Invalid file paths expression");
 
         return result;
+
+        void AddFile(string entry)
+        {
+            if (!File.Exists(entry)) throw new FileNotFoundException($"File not found: {entry}");
+
+            if (entry.EndsWith(".xls"))
+                throw new FormatException($".xls file format is not supported. Use .xlsx instead. File={entry}");
+            if (!entry.EndsWith(".xlsx"))
+                throw new FormatException($"{entry} file format is not supported. Use .xlsx. File={entry}");
+
+            if (!result.FilePaths.Add(entry))
+                throw new DuplicateNameException($"FilePath duplicated: {entry}");
+        }
     }
 }
 
@@ -78,14 +134,9 @@ public class Config
 {
     public Dictionary<string, string> FileNameRules = null!;
     public Dictionary<string, string> FieldRules = null!;
+    public HashSet<string>? AutoFileSearchDirectories = null;
+    public HashSet<string> AutoFileSearchRules = ["-- ПРИМЕР"];
     public HashSet<string> FilePaths = null!;
-
-    public void CheckValid()
-    {
-        if (FileNameRules is null) throw new FormatException($"Invalid file name replacement expression");
-        if (FieldRules is null) throw new FormatException($"Invalid field rules expression");
-        if (FilePaths is null) throw new FormatException($"Invalid file paths expression");
-    }
 
     public Task ProcessAsync() => Task.WhenAll(FilePaths.Select(GetFileModificationTask));
 
@@ -104,6 +155,7 @@ public class Config
             worksheet.Cells[pair.Key].Value = pair.Value;
 
         var resultFileName = originalFile.Name;
+        resultFileName = resultFileName.Replace("-- ПРИМЕР", "");
         foreach (var pair in FileNameRules)
             resultFileName = resultFileName.Replace(pair.Key, pair.Value);
 

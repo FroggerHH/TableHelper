@@ -14,7 +14,7 @@ file static class Program
     {
         Console.InputEncoding = System.Text.Encoding.UTF8;
         Console.OutputEncoding = System.Text.Encoding.UTF8;
-        
+
         ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
         PrintLogo();
@@ -29,10 +29,12 @@ file static class Program
 
     private static void ParseConfig(string configFilePath)
     {
-        var sr = new StreamReader(configFilePath);
+        string readToEnd;
+        using (var sr = new StreamReader(configFilePath)) readToEnd = sr.ReadToEnd();
+
         try
         {
-            _config = ConfigParser.ParseConfig(sr.ReadToEnd());
+            _config = ConfigParser.ParseConfig(readToEnd);
         }
         catch (Exception ex)
         {
@@ -40,10 +42,6 @@ file static class Program
             Console.WriteLine($"[Ошибка] {ex.Message}");
             Console.ResetColor();
             ExitProgram();
-        }
-        finally
-        {
-            sr.Close();
         }
     }
 
