@@ -19,11 +19,14 @@ file static class Program
 
         PrintLogo();
         ParseConfig(AskForConfig());
+        Console.WriteLine();
 
         await _config.ProcessAsync();
 
         Console.WriteLine();
+        Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine("Все операции успешно выполнены");
+        Console.ResetColor();
         ExitProgram();
     }
 
@@ -47,39 +50,68 @@ file static class Program
 
     private static string AskForConfig()
     {
-        var configFile = new DirectoryInfo(Environment.CurrentDirectory).GetFiles()
-            .FirstOrDefault(x => x.Extension == ".config");
-        if (configFile is not null) return configFile.FullName;
+        var configFiles = new DirectoryInfo(Environment.CurrentDirectory).GetFiles()
+            .Where(x => x.Extension == ".config").ToList();
+        if (configFiles.Count == 1)
+        {
+            var config = configFiles.First().Name;
+            Console.WriteLine($"Автоматически выбран файл настроек {config}");
+            return config;
+        }
 
-        Console.WriteLine("Введите пути к файлу настройки. Нажмите Enter для завершения ввода");
+        if (configFiles.Count == 0)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine(
+                "В папке с исполняемым файлом программы ожидаются файлы настроек, но таковые не были найдены");
+            Console.ResetColor();
+            ExitProgram();
+            return string.Empty;
+        }
+
+        Console.WriteLine("Выберите файл настроек. Введите его номер в списке. Нажмите Enter для завершения ввода");
+
+        for (int i = 0; i < configFiles.Count; i++) Console.WriteLine($"\t[{i + 1}] {configFiles[i].Name}");
+
         while (true)
         {
             Console.Write("\t> ");
-            var configFilePath = Console.ReadLine();
-
-            if (string.IsNullOrEmpty(configFilePath))
+            var numberStr = Console.ReadLine();
+            if (!int.TryParse(numberStr, out var number))
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("Путь к файлу не был введён");
+                Console.WriteLine($"Получено \"{numberStr}\", что не является числом");
                 Console.ResetColor();
                 ExitProgram();
                 return string.Empty;
             }
 
-            if (!File.Exists(configFilePath))
+            if (number < 0)
             {
-                Console.WriteLine("Файл не найден. Попробуйте снова.");
-                continue;
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("Номер не может быть меньше нуля");
+                Console.ResetColor();
+                ExitProgram();
+                return string.Empty;
             }
 
-            return configFilePath;
+            if (configFiles.Count < number)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"В списке нет файла настроек под номером {number}");
+                Console.ResetColor();
+                ExitProgram();
+                return string.Empty;
+            }
+
+            return configFiles[number - 1].FullName;
         }
     }
 
     private static void ExitProgram()
     {
         Console.WriteLine();
-        Console.WriteLine("Нажмите любую кнопку для закрытия...");
+        Console.WriteLine("Нажмите любую кнопку для закрытия приложения...");
 
         Console.ReadKey();
         Environment.Exit(0);
