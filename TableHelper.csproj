@@ -9,6 +9,8 @@
         <InvariantGlobalization>true</InvariantGlobalization>
         <PublishTrimmed>true</PublishTrimmed>
         <Version>0.1.1</Version>
+
+        <RuntimeIdentifiers>osx-x64;osx-arm64</RuntimeIdentifiers>
     </PropertyGroup>
 
     <ItemGroup>

@@ -201,7 +201,7 @@ public class Config
     public Dictionary<string, string>? CeilRules;
     public Dictionary<string, string>? GlobalReplacementRules;
     public HashSet<string>? AutoFileSearchDirectories;
-    public HashSet<string> AutoFileSearchRules = ["-- ПРИМЕР"];
+    public HashSet<string> AutoFileSearchRules = ["-- ШАБЛОН"];
     public HashSet<string>? FilePaths;
 
     public Task ProcessAsync()
@@ -258,7 +258,7 @@ public class Config
                 }
             }
 
-        var resultFileName = Path.GetFileNameWithoutExtension(filePath).Replace("-- ПРИМЕР", "").Trim() + ".xlsx";
+        var resultFileName = Path.GetFileNameWithoutExtension(filePath).Replace(" -- ШАБЛОН", "").Trim() + ".xlsx";
         foreach (var pair in FileNameRules!)
             resultFileName = resultFileName.Replace(pair.Key, pair.Value);
 
